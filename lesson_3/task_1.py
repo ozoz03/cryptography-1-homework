@@ -28,21 +28,25 @@ def get_flag():
     # text="AAAAAAAAAAAAAAAcAAAAAAAAAAAAAAA"
     # text="AAAAAAAAAAAAAAcrAAAAAAAAAAAAAA"
     # text="AAAAAAAAAAAAAcryAAAAAAAAAAAAA"
+    # "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     ascii_list=string.printable
-    print("".join(ascii_list))
     flag=[]
-    for i in range(15,-1,-1):
+    for i in range(31,-1,-1):
         print(i)
         for j in range(len(ascii_list)):
             c=ascii_list[j] 
-            payload=["A"]*i + flag + [c] + ["A"]*i 
+            payload=["A"]*(i) + flag + [c] + ["A"]*(i) 
             ct = encrypt("".join(payload))
+            # print("encrypt:", ct)
             parts = [ct[i : i + 32] for i in range(0, len(ct), 32)]
-            if parts[0]==parts[1]:
+            if parts[1]==parts[3]:
                 print("Found!")
                 flag.append(c)
                 print("".join(flag))
                 break
             j+=1
+        if flag[-1]=='}':
+            break
+
 get_flag()
-#FLAG=crypto{p3n6u1n5_
+#FLAG=crypto{p3n6u1n5_h473_3cb}
