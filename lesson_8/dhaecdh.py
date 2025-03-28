@@ -52,7 +52,7 @@ except InvalidSignature:
     quit
 
 # Створити відкритий ключ ECDH (значення Y = yP) для надсилання Alice
-bob_shared_value = bob_x_priv_key.exchange(
+bob_sharegitd_value = bob_x_priv_key.exchange(
     X25519PublicKey.from_public_bytes(binascii.unhexlify(alice_x_pub_key))
 )
 print("\nShared secret value:\n", binascii.hexlify(bob_shared_value))
