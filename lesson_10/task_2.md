@@ -1,0 +1,2 @@
+ssh-keygen -Y verify -f allowed_signers -n robot_dreams -s lektor.png.sig -I ruslan.kiyanchuk@gmail.com < image.png
+Good "robot_dreams" signature for ruslan.kiyanchuk@gmail.com with ED25519 key SHA256:SBdGwvJ0qTZg9amDdXFvgSixDho7C0AtxhYyU2KDj+g
