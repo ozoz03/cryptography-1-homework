@@ -1,0 +1,8 @@
+[user]
+    signingkey = C:\Users\ozoz0\.ssh\id_ed25519
+
+[gpg]
+    format = ssh
+
+[gpg "ssh"]
+    allowedSignersFile = C:\Users\ozoz0\.ssh\allowed_signers
