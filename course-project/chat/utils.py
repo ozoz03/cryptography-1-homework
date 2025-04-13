@@ -75,3 +75,12 @@ class Ratchet(object):
         self.state = output[:32]
         outkey, iv = output[32:64], output[64:]
         return outkey, iv    
+
+def pad(msg):
+    # pkcs7 padding
+    num = 16 - (len(msg) % 16)
+    return msg + bytes([num] * num)
+
+def unpad(msg):
+    # remove pkcs7 padding
+    return msg[:-msg[-1]]
