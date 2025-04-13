@@ -1,11 +1,17 @@
 import asyncio
 import signal
 import sys
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.backends import default_backend
+import base64
+
 
 YOUR_PROMPT = "\033[32m" + ">>> " + "\033[0m"
 THEIR_PROMPT = "\033[31m" + "\n<<< " + "\033[0m"
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8888
+MAX_LEN = 1024
 
 
 def prompt():
@@ -47,3 +53,25 @@ async def bob_client():
 
     # Bob connects to Alice
     return await asyncio.open_connection(SERVER_HOST, SERVER_PORT)
+
+
+def b64(msg):
+    # base64 encoding helper function
+    return base64.encodebytes(msg).decode('utf-8').strip()
+
+def hkdf(inp, length):
+    # use HKDF on an input to derive a key
+    hkdf = HKDF(algorithm=hashes.SHA256(), length=length, salt=b'',
+                info=b'', backend=default_backend())
+    return hkdf.derive(inp)
+
+class Ratchet(object):
+    def __init__(self, key):
+        self.state = key
+
+    def next(self, input=b''):
+        # turn the ratchet to change the state
+        output = hkdf(self.state + input, 80)
+        self.state = output[:32]
+        outkey, iv = output[32:64], output[64:]
+        return outkey, iv    
