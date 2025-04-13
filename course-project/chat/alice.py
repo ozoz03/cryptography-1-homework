@@ -1,21 +1,13 @@
 import asyncio
 
-from utils import alice_server, prompt, show, read_message_from_stdin, b64, hkdf, Ratchet, pad, unpad
+from utils import alice_server, prompt, show, read_message_from_stdin, b64, hkdf, Ratchet, pad, unpad, KeyBundle
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey,X25519PublicKey
 import base64
 from Crypto.Cipher import AES
 
-DHratchet = None
-root_ratchet = None
-recv_ratchet = None
-send_ratchet = None
 
-async def receive(reader):
-    global DHratchet
-    global root_ratchet
-    global recv_ratchet
-    global send_ratchet
+async def receive(reader,key_bundle):
     """Receive data from other party"""
     while True:
         bob_public_key = await reader.read(32)
@@ -27,22 +19,18 @@ async def receive(reader):
 
         # {DECRYPT HERE}
         # receive Bob's new public key and use it to perform a DH
-        dh_ratchet(bob_public_key)
-        key, iv = recv_ratchet.next()
+        dh_ratchet(bob_public_key, key_bundle)
+        key, iv = key_bundle.recv_ratchet.next()
         # decrypt the message using the new recv ratchet
         msg = unpad(AES.new(key, AES.MODE_CBC, iv).decrypt(data))
-        print('Decrypted message:', msg)
+        # print('Decrypted message:', msg)
         message = msg.decode()
 
         show(message)
         prompt()
 
 
-async def send(writer):
-    global DHratchet
-    global root_ratchet
-    global recv_ratchet
-    global send_ratchet
+async def send(writer,key_bundle):
     """Send data to other party"""
     while True:
         message = await read_message_from_stdin()
@@ -50,11 +38,11 @@ async def send(writer):
         # {ENCRYPT HERE}
         data = message.strip().encode()
         
-        key, iv = send_ratchet.next()
+        key, iv = key_bundle.send_ratchet.next()
         cipher = AES.new(key, AES.MODE_CBC, iv).encrypt(pad(data))
         print('Sending ciphertext to Bob:', b64(cipher))
         # send ciphertext and current DH public key
-        writer.write(DHratchet.public_key().public_bytes(
+        writer.write(key_bundle.DHratchet.public_key().public_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PublicFormat.Raw))
         # Send message
@@ -65,12 +53,6 @@ async def send(writer):
 
 
 async def init_connection(reader, writer):
-    global DHratchet
-    global root_ratchet
-    global recv_ratchet
-    global send_ratchet
-    print("Connected with Bob!")
-    prompt()
 
     # INITIAL EXCHANGE HERE
     IK = X25519PrivateKey.generate()
@@ -85,16 +67,12 @@ async def init_connection(reader, writer):
         format=serialization.PublicFormat.Raw
     ))
 
-
     IKb = await reader.read(32)
     IKb =  X25519PublicKey.from_public_bytes(IKb)
-    print("IKb:", IKb)
     SPKb = await reader.read(32)
     SPKb = X25519PublicKey.from_public_bytes(SPKb)
-    print("SPKb:", SPKb)
     OPKb = await reader.read(32)
     OPKb = X25519PublicKey.from_public_bytes(OPKb)
-    print("OPKb:", OPKb)
 
     dh1 = IK.exchange(SPKb)
     dh2 = EK.exchange(IKb)
@@ -103,41 +81,35 @@ async def init_connection(reader, writer):
     # the shared key is KDF(DH1||DH2||DH3||DH4)
     sk = hkdf(dh1 + dh2 + dh3 + dh4, 32)
     print('Shared key:', b64(sk))
-    # initialise the root chain with the shared key
-    root_ratchet = Ratchet(sk)
-    # initialise the sending and recving chains
-    send_ratchet = Ratchet(root_ratchet.next()[0])
-    recv_ratchet = Ratchet(root_ratchet.next()[0])
-    print('recv ratchet:', list(map(b64, recv_ratchet.next())))
-    print('send ratchet:', list(map(b64, send_ratchet.next())))
+    
+    key_bundle = KeyBundle(sk)
+    key_bundle.DHratchet = None
 
     # Initialise Alice's sending ratchet with Bob's public key
     PK = await reader.read(32)
     PK = X25519PublicKey.from_public_bytes(PK)
-    dh_ratchet(PK)
+    dh_ratchet(PK, key_bundle)
 
-    await asyncio.gather(receive(reader), send(writer))
+    print("Connected with Bob!")
+    prompt()
+    await asyncio.gather(receive(reader,key_bundle), send(writer,key_bundle))
 
-def dh_ratchet(bob_public):
-    global DHratchet
-    global root_ratchet
-    global recv_ratchet
-    global send_ratchet
+def dh_ratchet(bob_public, key_bundle):
     # perform a DH ratchet rotation using Bob's public key
-    if DHratchet is not None:
+    if key_bundle.DHratchet is not None:
         # the first time we don't have a DH ratchet yet
-        dh_recv = DHratchet.exchange(bob_public)
-        shared_recv = root_ratchet.next(dh_recv)[0]
+        dh_recv = key_bundle.DHratchet.exchange(bob_public)
+        shared_recv = key_bundle.root_ratchet.next(dh_recv)[0]
         # use Bob's public and our old private key
         # to get a new recv ratchet
-        recv_ratchet = Ratchet(shared_recv)
+        key_bundle.recv_ratchet = Ratchet(shared_recv)
         print('Recv ratchet seed:', b64(shared_recv))
     # generate a new key pair and send ratchet
     # our new public key will be sent with the next message to Bob
-    DHratchet = X25519PrivateKey.generate()
-    dh_send = DHratchet.exchange(bob_public)
-    shared_send = root_ratchet.next(dh_send)[0]
-    send_ratchet = Ratchet(shared_send)
+    key_bundle.DHratchet = X25519PrivateKey.generate()
+    dh_send = key_bundle.DHratchet.exchange(bob_public)
+    shared_send = key_bundle.root_ratchet.next(dh_send)[0]
+    key_bundle.send_ratchet = Ratchet(shared_send)
     print('Send ratchet seed:', b64(shared_send))
 
 if __name__ == "__main__":

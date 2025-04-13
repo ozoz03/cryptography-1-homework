@@ -4,6 +4,7 @@ import sys
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey,X25519PublicKey
 import base64
 
 
@@ -76,6 +77,17 @@ class Ratchet(object):
         outkey, iv = output[32:64], output[64:]
         return outkey, iv    
 
+class KeyBundle(object):
+    def __init__(self, sk):
+         # initialise the root chain with the shared key
+        self.root_ratchet = Ratchet(sk)
+        # initialise the sending and recving chains
+        self.recv_ratchet = Ratchet(self.root_ratchet.next()[0])
+        self.send_ratchet = Ratchet(self.root_ratchet.next()[0])
+        print('recv ratchet:', list(map(b64, self.recv_ratchet.next())))
+        print('send ratchet:', list(map(b64, self.send_ratchet.next())))
+        self.DHratchet = X25519PrivateKey.generate()
+   
 def pad(msg):
     # pkcs7 padding
     num = 16 - (len(msg) % 16)
