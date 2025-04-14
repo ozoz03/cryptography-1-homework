@@ -1,6 +1,6 @@
 import asyncio
 
-from utils import bob_client, show, prompt, read_message_from_stdin, b64, hkdf, Ratchet, pad, unpad, KeyBundle
+from utils import bob_client, show, prompt, read_message_from_stdin, b64, hkdf, Ratchet, pad, unpad, KeyBundle, dh_ratchet_rotate
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey,X25519PublicKey
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -23,7 +23,7 @@ async def receive(reader, key_bundle):
 
         # {DECRYPT HERE}
         # receive Alice's new public key and use it to perform a DH
-        dh_ratchet(alice_public_key, key_bundle)
+        dh_ratchet_rotate(alice_public_key, key_bundle)
         key, iv = key_bundle.recv_ratchet.next()
         # decrypt the message using the new recv ratchet
         msg = unpad(AES.new(key, AES.MODE_CBC, iv).decrypt(data))
@@ -92,7 +92,8 @@ async def init_connection():
     print('Shared key:', b64(sk))
 
     key_bundle = KeyBundle(sk)
-    
+
+    # Sending Bob's public key to Alice
     writer.write(key_bundle.DHratchet.public_key().public_bytes(
         encoding=serialization.Encoding.Raw,
         format=serialization.PublicFormat.Raw
@@ -101,22 +102,6 @@ async def init_connection():
     print("Connected to Alice!")
     prompt()
     await asyncio.gather(receive(reader, key_bundle), send(writer,key_bundle))
-
-def dh_ratchet(alice_public, key_bundle):
-    # perform a DH ratchet rotation using Alice's public key
-    dh_recv = key_bundle.DHratchet.exchange(alice_public)
-    shared_recv = key_bundle.root_ratchet.next(dh_recv)[0]
-    # use Alice's public and our old private key
-    # to get a new recv ratchet
-    key_bundle.recv_ratchet = Ratchet(shared_recv)
-    print('Recv ratchet seed:', b64(shared_recv))
-    # generate a new key pair and send ratchet
-    # our new public key will be sent with the next message to Alice
-    key_bundle.DHratchet = X25519PrivateKey.generate()
-    dh_send = key_bundle.DHratchet.exchange(alice_public)
-    shared_send = key_bundle.root_ratchet.next(dh_send)[0]
-    key_bundle.send_ratchet = Ratchet(shared_send)
-    print('Send ratchet seed:', b64(shared_send))
 
 if __name__ == "__main__":
     print("Starting Bob's chat...")

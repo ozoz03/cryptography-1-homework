@@ -77,6 +77,7 @@ class Ratchet(object):
         outkey, iv = output[32:64], output[64:]
         return outkey, iv    
 
+
 class KeyBundle(object):
     def __init__(self, sk):
          # initialise the root chain with the shared key
@@ -96,3 +97,19 @@ def pad(msg):
 def unpad(msg):
     # remove pkcs7 padding
     return msg[:-msg[-1]]
+
+
+def dh_ratchet_rotate(public_key, key_bundle):
+    if key_bundle.DHratchet is not None:
+            # the first time we don't have a DH ratchet yet
+            dh_recv = key_bundle.DHratchet.exchange(public_key)
+            shared_recv = key_bundle.root_ratchet.next(dh_recv)[0]
+            # use the public and our old private key
+            # to get a new recv ratchet
+            key_bundle.recv_ratchet = Ratchet(shared_recv)
+            print('Recv ratchet seed:', b64(shared_recv))
+    key_bundle.DHratchet = X25519PrivateKey.generate()
+    dh_send = key_bundle.DHratchet.exchange(public_key)
+    shared_send = key_bundle.root_ratchet.next(dh_send)[0]
+    key_bundle.send_ratchet = Ratchet(shared_send)
+    print('Send ratchet seed:', b64(shared_send))    
