@@ -1,2 +1,2 @@
-Made using this doc
+Made by using this doc
 https://nfil.dev/coding/encryption/python/double-ratchet-example/#symmetric-ratchet
